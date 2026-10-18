@@ -16,3 +16,4 @@ frontend/dist/
 ml/artifacts/
 *.log
 .DS_Store
+.vscode/
