@@ -359,3 +359,80 @@ def test_whitespace_only_comment_is_rejected(client):
     )
 
     assert response.status_code == 422
+
+def test_admin_can_view_all_customer_tickets(client, db_session):
+    customer = create_user(
+        db_session, "admin-list-owner@example.com", "customer"
+    )
+    admin = create_user(
+        db_session, "admin-list@example.com", "admin"
+    )
+
+    ticket = Ticket(
+        title="Customer ticket for admin",
+        description="This ticket must appear in the admin ticket list.",
+        priority="high",
+        status="open",
+        created_by=customer.id,
+    )
+    db_session.add(ticket)
+    db_session.commit()
+    db_session.refresh(ticket)
+
+    response = client.get(
+        "/tickets/admin/all",
+        headers=auth_headers(admin),
+    )
+
+    assert response.status_code == 200, response.text
+    assert any(item["id"] == ticket.id for item in response.json())
+
+
+def test_customer_cannot_view_admin_ticket_list(client):
+    register_customer(client)
+    token = login_customer(client)
+
+    response = client.get(
+        "/tickets/admin/all",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_admin_can_list_active_agents(client, db_session):
+    admin = create_user(
+        db_session, "agent-directory-admin@example.com", "admin"
+    )
+    active_agent = create_user(
+        db_session, "active-agent@example.com", "agent"
+    )
+    inactive_agent = create_user(
+        db_session, "inactive-agent@example.com", "agent"
+    )
+    inactive_agent.is_active = False
+    db_session.commit()
+
+    response = client.get(
+        "/tickets/agents",
+        headers=auth_headers(admin),
+    )
+
+    assert response.status_code == 200, response.text
+    agents = response.json()
+
+    assert any(item["id"] == active_agent.id for item in agents)
+    assert all(item["id"] != inactive_agent.id for item in agents)
+    assert all("password_hash" not in item for item in agents)
+
+
+def test_non_admin_cannot_list_agents(client):
+    register_customer(client)
+    token = login_customer(client)
+
+    response = client.get(
+        "/tickets/agents",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403

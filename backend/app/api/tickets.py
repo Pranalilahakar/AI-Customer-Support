@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.schemas.auth import UserResponse
 from app.schemas.ticket import TicketAssign
 from app.core.dependencies import require_role
 from app.core.dependencies import get_current_user
@@ -111,6 +112,40 @@ def get_assigned_tickets(
         .where(Ticket.assigned_to == current_user.id)
         .order_by(Ticket.created_at.desc())
     )
+    return db.scalars(statement).all()
+
+@router.get(
+    "/admin/all",
+    response_model=list[TicketResponse],
+)
+def get_all_tickets_for_admin(
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """Return all customer tickets to administrators only."""
+    statement = select(Ticket).order_by(Ticket.created_at.desc())
+
+    return db.scalars(statement).all()
+
+
+@router.get(
+    "/agents",
+    response_model=list[UserResponse],
+)
+def get_active_agents(
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """Return active agents for the admin assignment interface."""
+    statement = (
+        select(User)
+        .where(
+            User.role == "agent",
+            User.is_active.is_(True),
+        )
+        .order_by(User.full_name.asc())
+    )
+
     return db.scalars(statement).all()
 
 @router.post("/{ticket_id}/assign", response_model=TicketResponse)
