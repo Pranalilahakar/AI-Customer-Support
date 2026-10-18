@@ -1,0 +1,49 @@
+﻿title,description,category
+App crashes on login,The application crashes every time I try to log in,technical_issue
+Website shows an error,The website displays a server error when I open my dashboard,technical_issue
+Page not loading,The settings page keeps loading and never opens,technical_issue
+Mobile app freezes,The mobile application freezes when I click the profile button,technical_issue
+Upload failed,The document upload fails even though the file is valid,technical_issue
+Search is broken,The search feature returns an error instead of showing results,technical_issue
+Dashboard not working,My dashboard is blank after the latest application update,technical_issue
+Unexpected error,The application shows an unexpected error when saving changes,technical_issue
+Notification failure,The application does not send notifications when a task is updated,technical_issue
+Slow application,The application takes several minutes to load each page,technical_issue
+Integration failure,The API integration fails when sending a request to another service,technical_issue
+Export not working,Exporting records to a CSV file causes the application to crash,technical_issue
+Charged twice,My subscription payment was deducted twice from my bank account,billing
+Refund not received,I cancelled my order but have not received my refund,billing
+Invoice missing,I need a copy of the invoice for my last payment,billing
+Incorrect bill,My monthly invoice contains an incorrect amount,billing
+Payment failed,My payment failed but money was deducted from my account,billing
+Subscription renewal,Please explain the charge for my automatic subscription renewal,billing
+Update payment method,I want to change the credit card used for billing,billing
+Tax on invoice,The tax amount on my invoice appears to be incorrect,billing
+Subscription cancellation,Please cancel my paid subscription and explain the final charge,billing
+Discount not applied,The promotional discount was not applied to my payment,billing
+Payment confirmation,My payment is complete but I have not received a receipt,billing
+Billing cycle question,Can you explain when my next subscription payment is due,billing
+Forgot password,I forgot my password and cannot access my account,account_access
+Account locked,My account was locked after several unsuccessful login attempts,account_access
+Cannot sign in,I enter the correct credentials but cannot sign in,account_access
+Reset link expired,The password reset link has expired and I need another one,account_access
+Email verification,My account verification email has not arrived,account_access
+Change email address,I need to update the email address linked to my account,account_access
+Two factor issue,I cannot access my account because the authentication code fails,account_access
+Account disabled,My account appears to be disabled and I cannot log in,account_access
+Username forgotten,I do not remember the username associated with my account,account_access
+Login credentials,Please help me recover access to my registered account,account_access
+Permission denied,I receive an access denied message when opening my account,account_access
+Password reset issue,The password reset process does not let me set a new password,account_access
+Available plans,What subscription plans are available for new customers,general_inquiry
+Product information,I would like more information about the features of your product,general_inquiry
+Business hours,What are your customer support working hours,general_inquiry
+Contact support,How can I contact your customer support team,general_inquiry
+Service availability,Is your service available for small businesses,general_inquiry
+Feature request,Would you consider adding a dark mode to the application,general_inquiry
+Documentation request,Where can I find the user guide for your service,general_inquiry
+Trial information,Do you offer a free trial for new users,general_inquiry
+Supported languages,Which languages are supported by your application,general_inquiry
+Product comparison,Can you explain the differences between your subscription plans,general_inquiry
+Company information,I would like to know more about your company,general_inquiry
+Getting started,Where should a new customer begin using the service,general_inquiry

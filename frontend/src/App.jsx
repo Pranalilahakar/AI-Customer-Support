@@ -51,10 +51,17 @@ function formatStatus(status) {
   return (status || '').replaceAll('_', ' ')
 }
 
+function formatCategory(category) {
+  return (category || '')
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
 function formatDate(value) {
   if (!value) return '—'
 
   const date = new Date(value)
+
   return Number.isNaN(date.getTime())
     ? '—'
     : date.toLocaleDateString(undefined, {
@@ -102,10 +109,30 @@ function App() {
     priority: 'medium',
   })
 
+  // AI category suggestion state
+  const [categoryLoading, setCategoryLoading] = useState(false)
+  const [categorySuggestion, setCategorySuggestion] = useState(null)
+  const [categoryError, setCategoryError] = useState('')
+
   const clearMessages = useCallback(() => {
     setError('')
     setNotice('')
   }, [])
+
+  const resetCategorySuggestion = useCallback(() => {
+    setCategorySuggestion(null)
+    setCategoryError('')
+  }, [])
+
+  const resetTicketForm = useCallback(() => {
+    setTicketForm({
+      title: '',
+      description: '',
+      category: 'Technical Support',
+      priority: 'medium',
+    })
+    resetCategorySuggestion()
+  }, [resetCategorySuggestion])
 
   const logout = useCallback(() => {
     localStorage.removeItem('support_token')
@@ -157,7 +184,10 @@ function App() {
         try {
           currentUser = await request('/auth/me', {}, activeToken)
         } catch (authError) {
-          if (authError.status === 401 || authError.status === 403) {
+          if (
+            authError.status === 401 ||
+            authError.status === 403
+          ) {
             logout()
           } else {
             setError(authError.message)
@@ -177,6 +207,7 @@ function App() {
 
         if (results[1].status === 'rejected') {
           setAgents([])
+
           if (currentUser.role === 'admin') {
             setError(
               `Could not load agents: ${results[1].reason.message}`
@@ -231,6 +262,7 @@ function App() {
 
       localStorage.setItem('support_token', result.access_token)
       setToken(result.access_token)
+
       setAuthForm((previous) => ({
         ...previous,
         password: '',
@@ -254,7 +286,9 @@ function App() {
         try {
           await loadAgents(token)
         } catch (err) {
-          setError(`Tickets refreshed, but agents could not load: ${err.message}`)
+          setError(
+            `Tickets refreshed, but agents could not load: ${err.message}`
+          )
           return
         }
       }
@@ -265,8 +299,53 @@ function App() {
     }
   }
 
+  // AI: predict a category from the ticket title and description.
+  async function suggestCategory() {
+    const title = ticketForm.title.trim()
+    const description = ticketForm.description.trim()
+
+    if (title.length < 3) {
+      setCategoryError(
+        'Enter a title with at least 3 characters.'
+      )
+      setCategorySuggestion(null)
+      return
+    }
+
+    if (description.length < 10) {
+      setCategoryError(
+        'Enter a description with at least 10 characters.'
+      )
+      setCategorySuggestion(null)
+      return
+    }
+
+    setCategoryLoading(true)
+    setCategoryError('')
+    setCategorySuggestion(null)
+
+    try {
+      const result = await request('/ai/predict-category', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          description,
+        }),
+      })
+
+      setCategorySuggestion(result)
+    } catch (err) {
+      setCategoryError(
+        `Could not suggest a category: ${err.message}`
+      )
+    } finally {
+      setCategoryLoading(false)
+    }
+  }
+
   async function createTicket(event) {
     event.preventDefault()
+
     if (loading) return
 
     clearMessages()
@@ -287,13 +366,7 @@ function App() {
         token
       )
 
-      setTicketForm({
-        title: '',
-        description: '',
-        category: 'Technical Support',
-        priority: 'medium',
-      })
-
+      resetTicketForm()
       setShowCreate(false)
       setView('tickets')
       setNotice('Your ticket was created successfully.')
@@ -317,7 +390,9 @@ function App() {
         `/tickets/${ticket.id}/status`,
         {
           method: 'PATCH',
-          body: JSON.stringify({ status: newStatus }),
+          body: JSON.stringify({
+            status: newStatus,
+          }),
         },
         token
       )
@@ -352,12 +427,16 @@ function App() {
         `/tickets/${ticket.id}/assign`,
         {
           method: 'POST',
-          body: JSON.stringify({ assigned_to: agentId }),
+          body: JSON.stringify({
+            assigned_to: agentId,
+          }),
         },
         token
       )
 
-      const selectedAgent = agents.find((agent) => agent.id === agentId)
+      const selectedAgent = agents.find(
+        (agent) => agent.id === agentId
+      )
 
       setNotice(
         `Ticket #${ticket.id} assigned to ${
@@ -411,7 +490,9 @@ function App() {
         `/tickets/${activeTicket.id}/comments`,
         {
           method: 'POST',
-          body: JSON.stringify({ body: commentBody.trim() }),
+          body: JSON.stringify({
+            body: commentBody.trim(),
+          }),
         },
         token
       )
@@ -460,17 +541,21 @@ function App() {
           <span className="brand-name">SupportDesk</span>
 
           <div className="auth-hero">
-            <span className="eyebrow">CUSTOMER SUPPORT, SIMPLIFIED</span>
+            <span className="eyebrow">
+              CUSTOMER SUPPORT, SIMPLIFIED
+            </span>
+
             <h1>Every issue deserves a better answer.</h1>
+
             <p>
-              One workspace for support tickets, team workflows, and customer
-              conversations.
+              One workspace for support tickets, team workflows, and
+              customer conversations.
             </p>
 
             <div className="hero-points">
               <span>✓ Organized ticket management</span>
               <span>✓ Role-based team workflows</span>
-              <span>✓ Ready for AI-powered support</span>
+              <span>✓ AI-powered category suggestions</span>
             </div>
           </div>
 
@@ -539,7 +624,9 @@ function App() {
                 minLength={authMode === 'register' ? 8 : undefined}
                 type="password"
                 autoComplete={
-                  authMode === 'login' ? 'current-password' : 'new-password'
+                  authMode === 'login'
+                    ? 'current-password'
+                    : 'new-password'
                 }
                 value={authForm.password}
                 onChange={(event) =>
@@ -623,6 +710,7 @@ function App() {
           className="nav-item"
           onClick={() => {
             clearMessages()
+            resetCategorySuggestion()
             setShowCreate(true)
           }}
         >
@@ -633,7 +721,9 @@ function App() {
           <div className="help-card">
             <div className="help-icon">✦</div>
             <strong>Support, made smarter</strong>
-            <p>AI assistance is planned for a future release.</p>
+            <p>
+              Get AI-powered category suggestions when creating tickets.
+            </p>
           </div>
 
           <div className="profile">
@@ -669,10 +759,12 @@ function App() {
 
           <div className="topbar-actions">
             <span className="role-chip">{user.role}</span>
+
             <button
               className="primary-button"
               onClick={() => {
                 clearMessages()
+                resetCategorySuggestion()
                 setShowCreate(true)
               }}
             >
@@ -756,7 +848,11 @@ function App() {
 
                 <button
                   className="banner-button"
-                  onClick={() => setShowCreate(true)}
+                  onClick={() => {
+                    clearMessages()
+                    resetCategorySuggestion()
+                    setShowCreate(true)
+                  }}
                 >
                   Create a ticket <span>→</span>
                 </button>
@@ -787,6 +883,7 @@ function App() {
                       ? 'Assigned tickets'
                       : 'Recent tickets'}
                 </h2>
+
                 <p className="muted">
                   Search and filter the tickets available to your account.
                 </p>
@@ -884,8 +981,8 @@ function App() {
                                 type="button"
                                 disabled={
                                   busyTicketId === ticket.id ||
-                                  !assignmentByTicket[ticket.id] &&
-                                    !ticket.assigned_to
+                                  (!assignmentByTicket[ticket.id] &&
+                                    !ticket.assigned_to)
                                 }
                                 onClick={() => assignTicket(ticket)}
                               >
@@ -982,7 +1079,10 @@ function App() {
       {showCreate && (
         <div
           className="modal-backdrop"
-          onClick={() => setShowCreate(false)}
+          onClick={() => {
+            setShowCreate(false)
+            resetCategorySuggestion()
+          }}
         >
           <section
             className="modal-card"
@@ -1001,7 +1101,10 @@ function App() {
                 type="button"
                 className="icon-button"
                 aria-label="Close create ticket form"
-                onClick={() => setShowCreate(false)}
+                onClick={() => {
+                  setShowCreate(false)
+                  resetCategorySuggestion()
+                }}
               >
                 ✕
               </button>
@@ -1015,12 +1118,13 @@ function App() {
                   minLength={3}
                   maxLength={200}
                   value={ticketForm.title}
-                  onChange={(event) =>
-                    setTicketForm({
-                      ...ticketForm,
+                  onChange={(event) => {
+                    setTicketForm((previous) => ({
+                      ...previous,
                       title: event.target.value,
-                    })
-                  }
+                    }))
+                    resetCategorySuggestion()
+                  }}
                   placeholder="Briefly describe the issue"
                 />
               </label>
@@ -1032,40 +1136,92 @@ function App() {
                   minLength={10}
                   rows={4}
                   value={ticketForm.description}
-                  onChange={(event) =>
-                    setTicketForm({
-                      ...ticketForm,
+                  onChange={(event) => {
+                    setTicketForm((previous) => ({
+                      ...previous,
                       description: event.target.value,
-                    })
-                  }
+                    }))
+                    resetCategorySuggestion()
+                  }}
                   placeholder="Explain what happened and what you need help with"
                 />
               </label>
 
               <div className="form-row">
-                <label>
+                <label className="category-field">
                   Category
+
                   <input
                     maxLength={100}
                     value={ticketForm.category}
                     onChange={(event) =>
-                      setTicketForm({
-                        ...ticketForm,
+                      setTicketForm((previous) => ({
+                        ...previous,
                         category: event.target.value,
-                      })
+                      }))
                     }
+                    placeholder="Enter a category"
                   />
+
+                  <button
+                    type="button"
+                    className="secondary-button suggest-category-button"
+                    onClick={suggestCategory}
+                    disabled={categoryLoading || loading}
+                  >
+                    {categoryLoading
+                      ? 'Predicting...'
+                      : 'Suggest Category ✨'}
+                  </button>
+
+                  {categoryError && (
+                    <div className="alert error category-message">
+                      {categoryError}
+                    </div>
+                  )}
+
+                  {categorySuggestion && (
+                    <div className="category-suggestion">
+                      <p>
+                        <strong>AI suggestion:</strong>{' '}
+                        {formatCategory(categorySuggestion.category)}
+                      </p>
+
+                      <p className="muted">
+                        Confidence:{' '}
+                        {(
+                          categorySuggestion.confidence * 100
+                        ).toFixed(1)}
+                        %
+                      </p>
+
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => {
+                          setTicketForm((previous) => ({
+                            ...previous,
+                            category: categorySuggestion.category,
+                          }))
+                          resetCategorySuggestion()
+                        }}
+                      >
+                        Use this suggestion
+                      </button>
+                    </div>
+                  )}
                 </label>
 
                 <label>
                   Priority
+
                   <select
                     value={ticketForm.priority}
                     onChange={(event) =>
-                      setTicketForm({
-                        ...ticketForm,
+                      setTicketForm((previous) => ({
+                        ...previous,
                         priority: event.target.value,
-                      })
+                      }))
                     }
                   >
                     {PRIORITIES.map((priority) => (
@@ -1083,7 +1239,10 @@ function App() {
                 <button
                   type="button"
                   className="secondary-button"
-                  onClick={() => setShowCreate(false)}
+                  onClick={() => {
+                    setShowCreate(false)
+                    resetCategorySuggestion()
+                  }}
                 >
                   Cancel
                 </button>
@@ -1091,7 +1250,7 @@ function App() {
                 <button
                   type="submit"
                   className="primary-button"
-                  disabled={loading}
+                  disabled={loading || categoryLoading}
                 >
                   {loading ? 'Submitting…' : 'Submit ticket →'}
                 </button>
@@ -1138,7 +1297,9 @@ function App() {
               ) : comments.length === 0 ? (
                 <div className="empty-state">
                   <strong>No comments yet</strong>
-                  <p>Start the conversation by adding a comment below.</p>
+                  <p>
+                    Start the conversation by adding a comment below.
+                  </p>
                 </div>
               ) : (
                 comments.map((comment) => (
@@ -1157,6 +1318,7 @@ function App() {
                         </strong>
                         <span>{formatDate(comment.created_at)}</span>
                       </div>
+
                       <p>{comment.body}</p>
                     </div>
                   </article>

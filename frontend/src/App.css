@@ -194,3 +194,39 @@ input::placeholder, textarea::placeholder { color: #b1b2c2; }
   .section-heading h2 { font-size: 15px; }
   .form-row { grid-template-columns: 1fr; gap: 0; }
 }
+
+.category-field {
+  min-width: 0;
+}
+
+.suggest-category-button {
+  margin-top: 9px;
+  width: 100%;
+}
+
+.suggest-category-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.category-suggestion {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e7e3ff;
+  border-radius: 9px;
+  background: #f8f7ff;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.category-suggestion p {
+  margin: 0 0 6px;
+}
+
+.category-suggestion .muted {
+  margin-bottom: 8px;
+}
+
+.category-message {
+  margin: 10px 0 0;
+}
