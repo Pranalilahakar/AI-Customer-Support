@@ -1,68 +1,144 @@
-﻿import csv
+﻿
+import csv
+from collections import Counter
 from pathlib import Path
 
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
 
+# --------------------------------------------------
+# PATHS AND CONFIGURATION
+# --------------------------------------------------
+
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+
 DATASET_PATH = BACKEND_DIR / "data" / "ticket_categories.csv"
+
 MODEL_DIR = Path(__file__).resolve().parent / "models"
 MODEL_PATH = MODEL_DIR / "ticket_category_model.joblib"
 
+EXPECTED_CATEGORIES = {
+    "technical_issue",
+    "billing",
+    "account_access",
+    "general_inquiry",
+}
+
+TEST_SIZE = 0.25
+RANDOM_STATE = 42
+
+
+# --------------------------------------------------
+# LOAD AND VALIDATE DATASET
+# --------------------------------------------------
 
 def load_dataset():
+    """Load and validate ticket-category training examples."""
+
+    if not DATASET_PATH.exists():
+        raise FileNotFoundError(
+            f"Training dataset not found: {DATASET_PATH}"
+        )
+
     texts = []
     labels = []
+    skipped_rows = 0
 
-    with DATASET_PATH.open("r", encoding="utf-8-sig", newline="") as file:
+    with DATASET_PATH.open(
+        "r",
+        encoding="utf-8-sig",
+        newline="",
+    ) as file:
         reader = csv.DictReader(file)
 
-        required_columns = {"title", "description", "category"}
-        if not reader.fieldnames or not required_columns.issubset(reader.fieldnames):
+        required_columns = {
+            "title",
+            "description",
+            "category",
+        }
+
+        if (
+            not reader.fieldnames
+            or not required_columns.issubset(reader.fieldnames)
+        ):
             raise ValueError(
-                "Dataset must contain title, description, and category columns."
+                "Dataset must contain title, description, "
+                "and category columns."
             )
 
         for row in reader:
-            title = (row["title"] or "").strip()
-            description = (row["description"] or "").strip()
-            category = (row["category"] or "").strip()
+            title = (row.get("title") or "").strip()
+            description = (row.get("description") or "").strip()
+            category = (row.get("category") or "").strip().lower()
 
             if not title or not description or not category:
+                skipped_rows += 1
                 continue
 
             texts.append(f"{title}. {description}")
             labels.append(category)
 
     if len(texts) < 8:
-        raise ValueError("Not enough valid training examples.")
+        raise ValueError(
+            f"Only {len(texts)} valid examples found. "
+            "Add more training examples before training."
+        )
 
-    if len(set(labels)) < 2:
-        raise ValueError("The dataset must contain at least two categories.")
+    category_counts = Counter(labels)
+
+    missing_categories = EXPECTED_CATEGORIES - set(category_counts)
+
+    if missing_categories:
+        raise ValueError(
+            "The dataset is missing expected categories: "
+            f"{sorted(missing_categories)}"
+        )
+
+    # Stratified splitting requires at least two examples
+    # in each category to place examples in both sets.
+    insufficient_categories = {
+        category: count
+        for category, count in category_counts.items()
+        if count < 2
+    }
+
+    if insufficient_categories:
+        raise ValueError(
+            "At least two examples per category are required "
+            "for stratified evaluation. Insufficient counts: "
+            f"{insufficient_categories}"
+        )
+
+    print("\n===== DATASET SUMMARY =====")
+    print(f"Dataset: {DATASET_PATH}")
+    print(f"Valid examples: {len(texts)}")
+    print(f"Skipped incomplete rows: {skipped_rows}")
+    print(f"Categories: {sorted(category_counts)}")
+
+    print("\nExamples per category:")
+    for category, count in sorted(category_counts.items()):
+        print(f"  {category}: {count}")
 
     return texts, labels
 
 
-def main():
-    texts, labels = load_dataset()
+# --------------------------------------------------
+# BUILD CLASSIFICATION PIPELINE
+# --------------------------------------------------
 
-    print(f"Total examples: {len(texts)}")
-    print(f"Categories: {sorted(set(labels))}")
+def build_model():
+    """Create the TF-IDF and Logistic Regression pipeline."""
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        texts,
-        labels,
-        test_size=0.25,
-        random_state=42,
-        stratify=labels,
-    )
-
-    model = Pipeline(
+    return Pipeline(
         steps=[
             (
                 "tfidf",
@@ -77,49 +153,136 @@ def main():
                 LogisticRegression(
                     max_iter=1000,
                     class_weight="balanced",
-                    random_state=42,
+                    random_state=RANDOM_STATE,
                 ),
             ),
         ]
     )
 
-    model.fit(X_train, y_train)
+
+# --------------------------------------------------
+# EVALUATE MODEL
+# --------------------------------------------------
+
+def evaluate_model(model, X_test, y_test):
+    """Print holdout evaluation metrics."""
+
     predictions = model.predict(X_test)
 
-    print(f"\nTraining examples: {len(X_train)}")
-    print(f"Test examples: {len(X_test)}")
-    print(f"Test accuracy: {accuracy_score(y_test, predictions):.3f}")
+    accuracy = accuracy_score(y_test, predictions)
+
+    print("\n===== MODEL EVALUATION =====")
+
+    print(f"Test examples: {len(y_test)}")
+    print(f"Test accuracy: {accuracy:.3f}")
+
     print("\nClassification report:")
     print(
         classification_report(
             y_test,
             predictions,
+            labels=sorted(EXPECTED_CATEGORIES),
             zero_division=0,
         )
     )
 
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, MODEL_PATH)
+    labels = sorted(EXPECTED_CATEGORIES)
 
-    print(f"Model saved to: {MODEL_PATH}")
+    matrix = confusion_matrix(
+        y_test,
+        predictions,
+        labels=labels,
+    )
 
-    print("\nSample predictions:")
+    print("Confusion matrix (rows = actual, columns = predicted):")
+    print("Category order:", labels)
+    print(matrix)
+
+    return accuracy
+
+
+# --------------------------------------------------
+# SAMPLE PREDICTIONS
+# --------------------------------------------------
+
+def show_sample_predictions(model):
+    """Display predictions for representative ticket examples."""
+
     samples = [
-        "I was charged twice for my monthly plan",
-        "The application crashes when I open the dashboard",
-        "I cannot reset my password",
-        "What plans do you offer to new customers?",
+        (
+            "Duplicate subscription charge",
+            "I was charged twice for my monthly subscription "
+            "and need a refund.",
+        ),
+        (
+            "Application crashes",
+            "The dashboard crashes and displays a server error.",
+        ),
+        (
+            "Cannot reset password",
+            "I cannot reset my password or access my account.",
+        ),
+        (
+            "Product information",
+            "What features are included in the standard plan?",
+        ),
     ]
 
-    for sample in samples:
-        probabilities = model.predict_proba([sample])[0]
+    print("\n===== SAMPLE PREDICTIONS =====")
+
+    for title, description in samples:
+        text = f"{title}. {description}"
+
+        probabilities = model.predict_proba([text])[0]
         best_index = probabilities.argmax()
+
         category = model.classes_[best_index]
         confidence = probabilities[best_index]
 
-        print(f"- {sample}")
-        print(f"  Predicted category: {category}")
-        print(f"  Model confidence: {confidence:.3f}")
+        print(f"\nTitle: {title}")
+        print(f"Predicted category: {category}")
+        print(f"Confidence: {confidence:.3f}")
+
+
+# --------------------------------------------------
+# TRAIN AND SAVE MODEL
+# --------------------------------------------------
+
+def main():
+    texts, labels = load_dataset()
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        texts,
+        labels,
+        test_size=TEST_SIZE,
+        random_state=RANDOM_STATE,
+        stratify=labels,
+    )
+
+    print("\n===== TRAINING SUMMARY =====")
+    print(f"Training examples: {len(X_train)}")
+    print(f"Test examples: {len(X_test)}")
+
+    model = build_model()
+    model.fit(X_train, y_train)
+
+    accuracy = evaluate_model(model, X_test, y_test)
+
+    # Fit a final model on all available data after evaluation.
+    # The holdout score above still reflects the separate test set.
+    final_model = build_model()
+    final_model.fit(texts, labels)
+
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
+    joblib.dump(final_model, MODEL_PATH)
+
+    print(f"\nFinal model saved to: {MODEL_PATH}")
+    print(f"Holdout accuracy: {accuracy:.3f}")
+
+    show_sample_predictions(final_model)
+
+    print("\nTraining completed successfully.")
 
 
 if __name__ == "__main__":
