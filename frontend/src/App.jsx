@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import './App.css'
 
-const API = '/api'
+
+const API = import.meta.env.VITE_API_URL || '/api'
 
 const STATUSES = [
   { value: 'open', label: 'Open' },
